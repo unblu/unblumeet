@@ -7,6 +7,12 @@ Video is composited with Metal rather than one view per participant, which is
 what makes 100 participants practical: unwatched tiles are unsubscribed and
 their publishers stop uploading.
 
+## Demo
+
+[![Watch the demo](docs/demo-poster.jpg)](docs/demo.mp4)
+
+<video src="docs/demo.mp4" controls width="100%"></video>
+
 ## What it does
 
 - Grid, speaker and pinned layouts; drag tiles to rearrange them

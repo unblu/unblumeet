@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Unsandboxed, so no sandbox entitlements. These two are still required
+         because the hardened runtime is on: without them the runtime blocks
+         camera and microphone access regardless of TCC. -->
+    <key>com.apple.security.device.camera</key><true/>
+    <key>com.apple.security.device.audio-input</key><true/>
+</dict>
+</plist>

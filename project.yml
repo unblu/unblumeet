@@ -1,0 +1,83 @@
+name: UnbluMeet
+options:
+  bundleIdPrefix: com.unblu
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 5PMP974V72
+
+packages:
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift.git
+    majorVersion: 2.16.0
+
+targets:
+  UnbluMeet:
+    type: application
+    platform: macOS
+    sources:
+      # A synchronized folder, so adding a source file does not require
+      # regenerating the project. Regenerating while Xcode has the project open
+      # is what left it reporting a missing LiveKit package product.
+      - path: UnbluMeet
+        type: syncedFolder
+        excludes:
+          - Info.plist
+          - UnbluMeet.entitlements
+    dependencies:
+      - package: LiveKit
+        product: LiveKit
+    info:
+      path: UnbluMeet/Info.plist
+      properties:
+        CFBundleDisplayName: UnbluMeet
+        CFBundleIconName: AppIcon
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSCameraUsageDescription: UnbluMeet needs the camera for video conferencing.
+        NSMicrophoneUsageDescription: UnbluMeet needs the microphone for audio conferencing.
+        NSLocalNetworkUsageDescription: UnbluMeet connects to an Unblu server on your local network.
+        NSSpeechRecognitionUsageDescription: UnbluMeet transcribes what other participants say to show live captions.
+        # Browsing a Bonjour service is what reliably triggers the Local
+        # Network prompt; a plain HTTP request to a LAN address often does not.
+        # macOS only permits browsing the types listed here.
+        NSBonjourServices:
+          - _http._tcp
+          - _unblumeet._tcp
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.unblu.UnbluMeet
+        CODE_SIGN_ENTITLEMENTS: UnbluMeet/UnbluMeet.entitlements
+        ENABLE_APP_SANDBOX: NO
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+
+  UnbluMeetTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: UnbluMeetTests
+        type: syncedFolder
+    dependencies:
+      - target: UnbluMeet
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  UnbluMeet:
+    build:
+      targets:
+        UnbluMeet: all
+    test:
+      targets:
+        - UnbluMeetTests
+    run:
+      config: Debug

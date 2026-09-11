@@ -35,6 +35,7 @@ targets:
       path: UnbluMeet/Info.plist
       properties:
         CFBundleDisplayName: UnbluMeet
+        LSApplicationCategoryType: public.app-category.business
         CFBundleIconName: AppIcon
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSCameraUsageDescription: UnbluMeet needs the camera for video conferencing.
@@ -54,7 +55,7 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.unblu.UnbluMeet
         CODE_SIGN_ENTITLEMENTS: UnbluMeet/UnbluMeet.entitlements
-        ENABLE_APP_SANDBOX: NO
+        ENABLE_APP_SANDBOX: YES
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
 

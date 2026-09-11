@@ -33,9 +33,16 @@ private func conversation(participants: Int, bots: Int, created: Date?, host: St
     #expect(conversation(participants: 1, bots: 0, created: nil).hostName == "—")
 }
 
-@Test func memberColumnUsesSingularForOnePerson() {
-    #expect(ConferenceRow.peopleText(1) == "1 person")
-    #expect(ConferenceRow.peopleText(3) == "3 people")
+@Test func theColumnShowsWhoIsInTheCallWhenAnybodyIs() {
+    // Conversation membership is the agent plus the creator and never moves,
+    // so on its own the column always read "2 people".
+    #expect(ConferenceRow.peopleText(members: 2, inCall: 5) == "5 in call")
+    #expect(ConferenceRow.peopleText(members: 2, inCall: 1) == "1 in call")
+}
+
+@Test func anEmptyCallFallsBackToMembership() {
+    #expect(ConferenceRow.peopleText(members: 2, inCall: 0) == "2 members")
+    #expect(ConferenceRow.peopleText(members: 1, inCall: 0) == "1 member")
 }
 
 @Test func ageColumnShowsADashWhenTheTimestampIsMissing() {
@@ -53,4 +60,19 @@ private func conversation(participants: Int, bots: Int, created: Date?, host: St
     // Deliberately not String.hashValue: it is seeded per process, so colours
     // would change between launches.
     #expect(ConferenceRow.tint(for: "wH0ySAL0RcCUhb8g370rew") == ConferenceRow.tint(for: "wH0ySAL0RcCUhb8g370rew"))
+}
+
+@Test func aConferenceIsRecognisedByItsMarker() {
+    #expect(ConferenceDirectory.isConference("[UnbluMeet] Standup"))
+    #expect(!ConferenceDirectory.isConference("Customer chat"))
+    #expect(!ConferenceDirectory.isConference(nil))
+}
+
+@Test func aConversationWithNoTopicStillHasALabel() {
+    // Listing every conversation turns up ones started without a topic.
+    #expect(ConferenceDirectory.displayTopic(nil) == "(no topic)")
+}
+
+@Test func anOrdinaryConversationKeepsItsTopicIntact() {
+    #expect(ConferenceDirectory.displayTopic("Customer chat") == "Customer chat")
 }

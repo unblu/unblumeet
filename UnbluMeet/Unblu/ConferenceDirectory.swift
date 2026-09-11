@@ -17,6 +17,59 @@ struct ConferenceDirectory: Sendable {
         "\(topicMarker) \(topic)"
     }
 
+    /// Creates a visitor and puts them in the conversation, to join as.
+    ///
+    /// createOrUpdateVirtual yields a VISITOR person — a real participant
+    /// rather than this app's bot — and is idempotent by sourceId, so the same
+    /// guest name reuses the same person instead of accumulating them.
+    func createGuest(named name: String, in conversationId: String) async throws -> PersonData {
+        struct Body: Encodable {
+            let type = "PersonData"
+            let sourceId: String
+            let firstName: String
+            let lastName: String
+            enum CodingKeys: String, CodingKey {
+                case type = "$_type"
+                case sourceId, firstName, lastName
+            }
+        }
+        let components = name.split(separator: " ", maxSplits: 1)
+        let person: PersonData = try await client.post("/persons/createOrUpdateVirtual",
+            body: Body(sourceId: Self.sourceId(for: name),
+                       firstName: String(components.first ?? "Guest"),
+                       lastName: String(components.count > 1 ? components[1] : "")))
+
+        struct Participant: Encodable { let personId: String }
+        try await client.postIgnoringResponse("/conversations/\(conversationId)/addParticipant",
+                                              body: Participant(personId: person.id))
+        return person
+    }
+
+    /// Everyone the conversation knows about, for joining as one of them.
+    ///
+    /// Unblu's call UI matches a LiveKit identity against a person it already
+    /// has in the call, so testing that path means joining as a real person
+    /// rather than as this app's bot.
+    func people(in conversationId: String) async throws -> [PersonData] {
+        let conversation: ConversationData = try await client.get(
+            "/conversations/\(conversationId)/read")
+
+        var people: [PersonData] = []
+        let ids = (conversation.participants ?? []).compactMap(\.personId)
+            + (conversation.botParticipants ?? []).compactMap(\.personId)
+        for id in ids {
+            if let person: PersonData = try? await client.get("/persons/\(id)/read") {
+                people.append(person)
+            }
+        }
+        return people
+    }
+
+    /// Whether this conversation is one of this app's conferences.
+    static func isConference(_ topic: String?) -> Bool {
+        topic?.hasPrefix(topicMarker) ?? false
+    }
+
     static func displayTopic(_ topic: String?) -> String {
         guard let topic else { return "(no topic)" }
         guard topic.hasPrefix(topicMarker) else { return topic }
@@ -65,7 +118,10 @@ struct ConferenceDirectory: Sendable {
     }
 
     /// Only this app's conferences.
-    func listConferences(limit: Int = 50) async throws -> [ConversationData] {
+    /// `onlyConferences` filters by the topic marker; without it the search
+    /// returns every conversation on the server, which is how you reach one an
+    /// agent started rather than one this app created.
+    func listConferences(limit: Int = 50, onlyConferences: Bool = true) async throws -> [ConversationData] {
         struct Operator: Encodable {
             let dollarType = "ContainsStringOperator"
             let type = "CONTAINS"
@@ -94,7 +150,9 @@ struct ConferenceDirectory: Sendable {
             }
         }
         let body = Body(limit: limit,
-                        searchFilters: [Filter(operator: Operator(value: Self.topicMarker))])
+                        searchFilters: onlyConferences
+                            ? [Filter(operator: Operator(value: Self.topicMarker))]
+                            : [])
         let result: ConversationResult = try await client.post("/conversations/search", body: body)
         return result.items
     }

@@ -24,6 +24,8 @@ final class PresenterOverlay: @unchecked Sendable {
     private let logger = Logger(subsystem: "com.unblu.UnbluMeet", category: "PresenterOverlay")
 
     private var frameCount = 0
+    private var segmentCount = 0
+    private var composeCount = 0
     private var pool: CVPixelBufferPool?
     private var poolSize: CGSize = .zero
 
@@ -55,7 +57,14 @@ final class PresenterOverlay: @unchecked Sendable {
             logger.error("Segmentation failed: \(error.localizedDescription, privacy: .public)")
             return
         }
-        guard let maskBuffer = request.results?.first?.pixelBuffer else { return }
+        guard let maskBuffer = request.results?.first?.pixelBuffer else {
+            logger.info("Segmentation found nobody")
+            return
+        }
+        segmentCount += 1
+        if segmentCount % 30 == 1 {
+            logger.info("mask coverage \(Self.coverage(of: maskBuffer), format: .fixed(precision: 2)) of \(CVPixelBufferGetWidth(maskBuffer))x\(CVPixelBufferGetHeight(maskBuffer)), camera \(CVPixelBufferGetWidth(pixelBuffer))x\(CVPixelBufferGetHeight(pixelBuffer))")
+        }
 
         let source = CIImage(cvPixelBuffer: pixelBuffer)
         var mask = CIImage(cvPixelBuffer: maskBuffer)
@@ -79,6 +88,10 @@ final class PresenterOverlay: @unchecked Sendable {
 
     /// Draws the cut-out over a screen frame, or returns it untouched.
     func compose(onto screen: CVPixelBuffer) -> CVPixelBuffer {
+        composeCount += 1
+        if composeCount % 150 == 1 {
+            logger.info("compose enabled=\(self.isEnabled) person=\(self.hasPerson)")
+        }
         guard isEnabled, let person = personLock.withLock({ $0 }) else { return screen }
 
         let background = CIImage(cvPixelBuffer: screen)
@@ -104,6 +117,26 @@ final class PresenterOverlay: @unchecked Sendable {
         let x = screen.width - person.width * scale - margin
         return CGAffineTransform(scaleX: scale, y: scale)
             .concatenating(CGAffineTransform(translationX: x, y: margin))
+    }
+
+    /// Fraction of the mask that counts as person, to tell a real cut-out
+    /// from a mask that covers everything.
+    nonisolated static func coverage(of mask: CVPixelBuffer) -> Double {
+        CVPixelBufferLockBaseAddress(mask, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(mask, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(mask)?.assumingMemoryBound(to: UInt8.self) else { return -1 }
+        let width = CVPixelBufferGetWidth(mask)
+        let height = CVPixelBufferGetHeight(mask)
+        let stride = CVPixelBufferGetBytesPerRow(mask)
+        var inside = 0
+        var total = 0
+        for y in Swift.stride(from: 0, to: height, by: 4) {
+            for x in Swift.stride(from: 0, to: width, by: 4) {
+                if base[y * stride + x] > 127 { inside += 1 }
+                total += 1
+            }
+        }
+        return total == 0 ? -1 : Double(inside) / Double(total)
     }
 
     private func makePixelBuffer(size: CGSize) -> CVPixelBuffer? {

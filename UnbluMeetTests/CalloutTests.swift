@@ -177,3 +177,26 @@ import CoreGraphics
     #expect(abs(radius.width - 0.012) < 0.0001)
     #expect(abs(radius.height - 0.024) < 0.0001)
 }
+
+@Test func aTileIsInsetByTheGutterOnBothAxesEqually() {
+    // Equal pixels, not equal fractions: a fraction of a wide viewport is more
+    // pixels horizontally, which shows as uneven gutters.
+    let viewport = CGSize(width: 1600, height: 900)
+    let rect = CGRect(x: 0, y: 0, width: 0.5, height: 0.5)
+    let inset = MetalCompositor.inset(rect, byPixels: 8, viewport: viewport)
+    let horizontal = (rect.width - inset.width) * viewport.width
+    let vertical = (rect.height - inset.height) * viewport.height
+    #expect(abs(horizontal - vertical) < 0.01)
+    #expect(abs(horizontal - 16) < 0.01)
+}
+
+@Test func aTileTooSmallForTheGutterIsLeftAlone() {
+    // Twenty-five participants on a small window: insetting would swallow them.
+    let tiny = CGRect(x: 0, y: 0, width: 0.02, height: 0.02)
+    #expect(MetalCompositor.inset(tiny, byPixels: 8, viewport: CGSize(width: 400, height: 300)) == tiny)
+}
+
+@Test func aZeroViewportDoesNotDivideByZero() {
+    let rect = CGRect(x: 0, y: 0, width: 0.5, height: 0.5)
+    #expect(MetalCompositor.inset(rect, byPixels: 8, viewport: .zero) == rect)
+}

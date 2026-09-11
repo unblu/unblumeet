@@ -40,3 +40,15 @@ private func normalised(_ text: String) -> String {
     #expect(UnbluClient.downloadURL(for: "/app/rest/fileDownload/x", base: base)?.absoluteString
             == "https://unblu.example.com/app/rest/fileDownload/x")
 }
+
+@Test func aBlankStoredSettingFallsBackToTheDefault() {
+    // A stored empty string is still a value, so it beat the default and the
+    // app kept using nothing at all.
+    #expect(SettingsStore.stored("") == nil)
+    #expect(SettingsStore.stored("   ") == nil)
+    #expect(SettingsStore.stored(nil) == nil)
+}
+
+@Test func arealStoredSettingIsKept() {
+    #expect(SettingsStore.stored("wss://livekit.example.com") == "wss://livekit.example.com")
+}

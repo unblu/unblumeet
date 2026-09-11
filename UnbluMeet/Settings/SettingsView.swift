@@ -19,6 +19,8 @@ struct SettingsView: View {
         }
     }
 
+    @State private var needsRestart = false
+
     var body: some View {
         Form {
             Section("Identity") {
@@ -38,9 +40,27 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Testing") {
+                Toggle("Join as the exact Unblu person", isOn: $settings.exactIdentity)
+                Text("Unblu's call UI only shows a participant whose LiveKit identity matches a person it already has in the call, so this is needed to appear there. A LiveKit identity is exclusive: joining this way evicts that person's Unblu session, and the two will keep evicting each other. For testing only.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Permissions") {
                 HStack {
                     Button("Request Local Network Access") { localNetwork.request() }
+                    // Stored values survive reinstalling, the keychain ones
+                    // especially, so there has to be a way back to the
+                    // built-in defaults.
+                    Button("Reset to Defaults") {
+                        settings.resetToDefaults()
+                        needsRestart = true
+                    }
+                    if needsRestart {
+                        Text("Quit and reopen UnbluMeet to pick the defaults up.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Spacer()
                     localNetworkStatus
                 }

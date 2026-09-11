@@ -12,23 +12,36 @@ struct TokenSigner {
     }
 
     func sign(identity: String, displayName: String, room: String, ttl: TimeInterval) -> String {
+        sign(subject: identity, ttl: ttl, extra: ["name": displayName], video: [
+            "room": room,
+            "roomJoin": true,
+            "canPublish": true,
+            "canSubscribe": true,
+            "canPublishData": true,
+        ])
+    }
+
+    /// For asking the server what is going on, rather than joining anything.
+    func signAdmin(ttl: TimeInterval) -> String {
+        sign(subject: apiKey, ttl: ttl, extra: [:], video: [
+            "roomList": true,
+            "roomAdmin": true,
+        ])
+    }
+
+    private func sign(subject: String, ttl: TimeInterval,
+                      extra: [String: Any], video: [String: Any]) -> String {
         let now = Date().timeIntervalSince1970
 
         let header: [String: Any] = ["alg": "HS256", "typ": "JWT"]
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "iss": apiKey,
-            "sub": identity,
-            "name": displayName,
+            "sub": subject,
             "nbf": now,
             "exp": now + ttl,
-            "video": [
-                "room": room,
-                "roomJoin": true,
-                "canPublish": true,
-                "canSubscribe": true,
-                "canPublishData": true,
-            ],
+            "video": video,
         ]
+        payload.merge(extra) { current, _ in current }
 
         let signingInput = Self.encode(header) + "." + Self.encode(payload)
         let mac = HMAC<SHA256>.authenticationCode(

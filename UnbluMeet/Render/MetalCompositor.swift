@@ -1,4 +1,5 @@
 import Foundation
+import QuartzCore
 import Metal
 import MetalKit
 import CoreVideo
@@ -82,6 +83,8 @@ final class MetalCompositor: NSObject, MTKViewDelegate {
     // Written by the UI thread via updateLayout, read by the render thread.
     private let layoutLock = NSLock()
     private var participantIDs: [String] = []
+    /// Only touched inside draw(), on the render thread.
+    private var animator = TileAnimator()
     private var mode: LayoutMode = .grid
     private var focusID: String?
     private var zooms: [String: ZoomState] = [:]
@@ -248,8 +251,15 @@ final class MetalCompositor: NSObject, MTKViewDelegate {
 
         // No stripOffset here: the caller already sliced participantIDs to
         // the visible window.
-        let tiles = TileLayout.layout(mode: mode, participantIDs: ids,
-                                      focusID: focus, aspect: 16.0 / 9.0)
+        let laidOut = TileLayout.layout(mode: mode, participantIDs: ids,
+                                        focusID: focus, aspect: 16.0 / 9.0)
+        // Badges and borders read drawnTiles, so they follow the gutter and
+        // the movement too.
+        let gutted = laidOut.map {
+            Tile(participantID: $0.participantID,
+                 rect: Self.inset($0.rect, byPixels: Self.tileGutterPx, viewport: drawableSize))
+        }
+        let tiles = animator.resolve(targets: gutted, now: CACurrentMediaTime())
         drawnTilesLock.withLock { $0 = tiles }
         renderedIDsLock.withLock { $0 = renderedSet }
 
@@ -269,7 +279,7 @@ final class MetalCompositor: NSObject, MTKViewDelegate {
                                      Float(uv.width), Float(uv.height)),
                 sizePx: SIMD2<Float>(Float(tile.rect.width * drawableSize.width),
                                      Float(tile.rect.height * drawableSize.height)),
-                radiusPx: 0, blurPx: 0)
+                radiusPx: Float(Self.tileCornerPx), blurPx: 0)
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<TileUniforms>.stride, index: 0)
             encoder.setFragmentBytes(&uniforms, length: MemoryLayout<TileUniforms>.stride, index: 0)
 
@@ -303,14 +313,16 @@ final class MetalCompositor: NSObject, MTKViewDelegate {
             let uv = Self.aspectFillRect(frameSize: frameSize, tileSize: pixels)
 
             // Soft shadow first, on a rect expanded by the blur radius.
-            let blur: CGFloat = 18
+            let blur: CGFloat = 26
+            let drop = blur * 0.35
             let grow = CGSize(width: blur / drawableSize.width, height: blur / drawableSize.height)
             var shadowUniforms = TileUniforms(
-                rect: SIMD4<Float>(Float(rect.origin.x - grow.width), Float(rect.origin.y - grow.height),
+                rect: SIMD4<Float>(Float(rect.origin.x - grow.width),
+                                   Float(rect.origin.y - grow.height + drop / drawableSize.height),
                                    Float(rect.width + grow.width * 2), Float(rect.height + grow.height * 2)),
                 uvRect: SIMD4<Float>(0, 0, 1, 1),
                 sizePx: SIMD2<Float>(Float(pixels.width + blur * 2), Float(pixels.height + blur * 2)),
-                radiusPx: 14 + Float(blur), blurPx: Float(blur))
+                radiusPx: 14, blurPx: Float(blur))
             encoder.setRenderPipelineState(shadowPipeline)
             encoder.setVertexBytes(&shadowUniforms, length: MemoryLayout<TileUniforms>.stride, index: 0)
             encoder.setFragmentBytes(&shadowUniforms, length: MemoryLayout<TileUniforms>.stride, index: 0)
@@ -378,7 +390,7 @@ final class MetalCompositor: NSObject, MTKViewDelegate {
                     uvRect: SIMD4<Float>(0, 0, 1, 1),
                     sizePx: SIMD2<Float>(Float(insetPixels.width + blur * 2),
                                          Float(insetPixels.height + blur * 2)),
-                    radiusPx: Float(Self.calloutCornerPx) + Float(blur), blurPx: Float(blur))
+                    radiusPx: Float(Self.calloutCornerPx), blurPx: Float(blur))
                 encoder.setRenderPipelineState(shadowPipeline)
                 encoder.setVertexBytes(&shadowUniforms, length: MemoryLayout<TileUniforms>.stride, index: 0)
                 encoder.setFragmentBytes(&shadowUniforms, length: MemoryLayout<TileUniforms>.stride, index: 0)
@@ -543,6 +555,21 @@ final class MetalCompositor: NSObject, MTKViewDelegate {
 
     /// Corner radius of a callout, in drawable pixels.
     static let calloutCornerPx: CGFloat = 12
+    /// Video tiles: a rounded corner and a gutter between them.
+    static let tileCornerPx: CGFloat = 14
+    static let tileGutterPx: CGFloat = 8
+
+    /// Shrinks a tile by a pixel amount, for the gutter between tiles.
+    ///
+    /// Applied when drawing rather than in the layout, so hit-testing keeps the
+    /// full cell and a click in the gutter still lands on the tile beside it.
+    static func inset(_ rect: CGRect, byPixels pixels: CGFloat, viewport: CGSize) -> CGRect {
+        guard viewport.width > 0, viewport.height > 0, pixels > 0 else { return rect }
+        let dx = pixels / viewport.width
+        let dy = pixels / viewport.height
+        guard rect.width > dx * 4, rect.height > dy * 4 else { return rect }
+        return rect.insetBy(dx: dx, dy: dy)
+    }
 
     /// That radius expressed as a fraction of the tile, separately per axis —
     /// a tile is rarely square, so one number would skew the corners.

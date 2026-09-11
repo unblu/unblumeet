@@ -2,10 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Unsandboxed, so no sandbox entitlements. These two are still required
-         because the hardened runtime is on: without them the runtime blocks
-         camera and microphone access regardless of TCC. -->
+    <key>com.apple.security.app-sandbox</key><true/>
+
+    <!-- Outgoing to the LiveKit and Unblu servers. -->
+    <key>com.apple.security.network.client</key><true/>
+    <!-- WebRTC has to receive on a local UDP port; without this, signalling
+         succeeds and media never arrives. -->
+    <key>com.apple.security.network.server</key><true/>
+
+    <!-- Also required by the hardened runtime, sandbox or not. -->
     <key>com.apple.security.device.camera</key><true/>
     <key>com.apple.security.device.audio-input</key><true/>
+
+    <!-- Attaching a file to chat, and saving one to open it elsewhere. -->
+    <key>com.apple.security.files.user-selected.read-write</key><true/>
 </dict>
 </plist>

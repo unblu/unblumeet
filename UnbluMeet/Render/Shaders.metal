@@ -48,13 +48,21 @@ static inline float cornerAlpha(float2 local, float2 sizePx, float radiusPx) {
 }
 
 // Soft drop shadow behind a rounded tile.
+//
+// The quad is larger than the tile by the blur radius on every side, and the
+// shape is that much smaller than the quad — measuring against the quad drew a
+// flat slab with a hard edge, which reads as a second rectangle rather than a
+// shadow. Alpha then eases out across the blur instead of falling off
+// linearly, so there is no visible band where it stops.
 fragment float4 tile_fragment_shadow(VertexOut in [[stage_in]],
                                      constant TileUniforms &uniforms [[buffer(0)]]) {
-    float2 halfSize = uniforms.sizePx * 0.5;
-    float dist = roundedBoxSDF(in.local * uniforms.sizePx - halfSize,
-                               halfSize, uniforms.radiusPx);
-    float alpha = saturate(1.0 - dist / max(uniforms.blurPx, 1.0)) * 0.55;
-    return float4(0.0, 0.0, 0.0, alpha);
+    float blur = max(uniforms.blurPx, 1.0);
+    float2 halfQuad = uniforms.sizePx * 0.5;
+    float2 halfShape = max(halfQuad - blur, float2(1.0));
+    float dist = roundedBoxSDF(in.local * uniforms.sizePx - halfQuad,
+                               halfShape, uniforms.radiusPx);
+    float fade = 1.0 - smoothstep(0.0, blur, dist);
+    return float4(0.0, 0.0, 0.0, fade * fade * 0.55);
 }
 
 // Packed BGRA — what VideoFrame.toCVPixelBuffer() produces when it converts a

@@ -19,6 +19,7 @@ struct ControlBar: View {
     let onOpenSharePicker: () -> Void
     let onStopShare: () -> Void
 
+    let onShowConnection: () -> Void
     let onLeave: () -> Void
     let onDragChanged: (CGSize) -> Void
     let onDragEnded: () -> Void
@@ -61,6 +62,10 @@ struct ControlBar: View {
                          active: isSharing) {
                 isSharing ? onStopShare() : onOpenSharePicker()
             }
+
+            CircleButton(system: "waveform.path.ecg",
+                         help: "Connection details (⌘I)") { onShowConnection() }
+                .keyboardShortcut("i", modifiers: .command)
 
             CircleButton(system: captionsOn ? "captions.bubble.fill" : "captions.bubble",
                          help: captionsOn ? "Turn captions off" : "Turn captions on",

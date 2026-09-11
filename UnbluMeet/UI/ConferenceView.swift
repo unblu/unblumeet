@@ -29,6 +29,9 @@ struct ConferenceView: View {
     @State private var stripOffset = 0
     @State private var stripScrollAccumulator: CGFloat = 0
     @State private var barPosition = BarPosition()
+    @State private var captionPosition = BarPosition()
+    @State private var inspector = ConnectionInspector()
+    @State private var showConnection = false
     @State private var stageSize: CGSize = .zero
     @State private var chatWidth: CGFloat = 300
     @State private var shareError: String?
@@ -70,6 +73,26 @@ struct ConferenceView: View {
         .animation(.snappy(duration: 0.28), value: chatShown)
         .animation(.snappy(duration: 0.28), value: summaryShown)
         .frame(minWidth: 940, minHeight: 560)
+        .sheet(isPresented: $showConnection) {
+            ConnectionPanel(inspector: inspector) { showConnection = false }
+        }
+        .onChange(of: showConnection) { _, shown in
+            guard let controller else { return }
+            if shown {
+                if let url = URL(string: settings.unbluBaseURL) {
+                    inspector.unblu = UnbluStatusProbe(
+                        client: UnbluClient(baseURL: url,
+                                            username: settings.unbluUsername,
+                                            password: settings.unbluPassword),
+                        host: url.host() ?? settings.unbluBaseURL,
+                        conversationId: conversationId,
+                        identity: controller.localIdentity ?? identity)
+                }
+                inspector.start(controller: controller)
+            } else {
+                inspector.stop()
+            }
+        }
         .sheet(isPresented: $showSharePicker) {
             SharePicker(catalog: shareCatalog,
                         onPick: { target in
@@ -200,6 +223,7 @@ struct ConferenceView: View {
                        shareCatalog.load()
                    },
                    onStopShare: { Task { await controller?.stopScreenShare() } },
+                   onShowConnection: { showConnection = true },
                    onLeave: { Task { await leave() } },
                    onDragChanged: { translation in
                        barPosition.drag(translation, within: stageSize)
@@ -378,8 +402,20 @@ struct ConferenceView: View {
         if captionsOn {
             VStack {
                 Spacer()
-                TimelineView(.periodic(from: .now, by: 0.4)) { _ in
-                    captionContent
+                MovableBar(position: captionPosition) {
+                    TimelineView(.periodic(from: .now, by: 0.4)) { _ in
+                        captionContent
+                    }
+                    .contentShape(Rectangle())
+                    // Global space, as with the control bar: the block moves
+                    // with the drag, so a local origin would shift underneath
+                    // the gesture and the two would fight.
+                    .gesture(
+                        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                            .onChanged { captionPosition.drag($0.translation, within: stageSize) }
+                            .onEnded { _ in captionPosition.endDrag() }
+                    )
+                    .help("Drag to move the captions")
                 }
                 .padding(.bottom, 86)
                 .padding(.horizontal, 40)
@@ -777,6 +813,7 @@ struct ConferenceView: View {
     }
 
     private func leave() async {
+        inspector.stop()
         summary.stop()
         captions.stop()
         micLevels.stop()

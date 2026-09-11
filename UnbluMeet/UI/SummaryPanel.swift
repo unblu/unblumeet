@@ -16,7 +16,10 @@ struct SummaryPanel: View {
             footer
         }
         .frame(width: width)
-        .background(.thinMaterial)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.08)))
+        .padding(.vertical, 8)
+        .padding(.leading, 8)
     }
 
     private var header: some View {

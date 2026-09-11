@@ -35,7 +35,7 @@ struct ChatView: View {
                 Button { chooseFile() } label: {
                     Image(systemName: "paperclip")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableButtonStyle())
                 .help("Attach a file")
 
                 TextField("Message", text: $draft)
@@ -46,6 +46,10 @@ struct ChatView: View {
             .padding(8)
         }
         .frame(width: width)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.08)))
+        .padding(.vertical, 8)
+        .padding(.trailing, 8)
         .task { chat.startPolling() }
         .onDisappear { chat.stopPolling() }
         .onDrop(of: [.fileURL], isTargeted: $isDropTarget) { providers in
@@ -167,7 +171,7 @@ struct ChatView: View {
             } else {
                 Text(message.text ?? "")
                     .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(isOwn ? Color.accentColor.opacity(0.25) : Color.gray.opacity(0.2),
+                    .background(isOwn ? Color.accentColor.opacity(0.28) : Color.primary.opacity(0.10),
                                 in: RoundedRectangle(cornerRadius: 8))
             }
         }

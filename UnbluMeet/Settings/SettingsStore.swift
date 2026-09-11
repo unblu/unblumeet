@@ -25,6 +25,7 @@ final class SettingsStore {
         static let unbluBaseURL = "unbluBaseURL"
         static let unbluUsername = "unbluUsername"
         static let presenterOverlay = "presenterOverlay"
+        static let exactIdentity = "exactIdentity"
     }
 
     var liveKitURL: String {
@@ -49,6 +50,16 @@ final class SettingsStore {
         didSet { Self.keychainSet("unbluPassword", unbluPassword) }
     }
 
+    /// Join LiveKit as the bare Unblu person id rather than a per-session one.
+    ///
+    /// For testing against Unblu's own call UI, which renders a participant
+    /// only when the LiveKit identity equals a person it already believes is
+    /// in the call. Off by default: an identity is exclusive, so this evicts
+    /// that person's Unblu session and a stale one blocks rejoining.
+    var exactIdentity: Bool {
+        didSet { UserDefaults.standard.set(exactIdentity, forKey: Key.exactIdentity) }
+    }
+
     /// Draw the presenter, cut out of their camera, onto their screen share.
     var presenterOverlay: Bool {
         didSet { UserDefaults.standard.set(presenterOverlay, forKey: Key.presenterOverlay) }
@@ -64,16 +75,38 @@ final class SettingsStore {
     }
 
     init() {
-        // Stored values win; the defaults only fill blanks on first launch.
+        // A stored value wins, but only if there is something in it. A blank
+        // beat the default, which is how an emptied field made the app ignore
+        // the defaults for good.
         let d = UserDefaults.standard
-        liveKitURL = d.string(forKey: Key.liveKitURL) ?? Defaults.liveKitURL
-        liveKitAPIKey = d.string(forKey: Key.liveKitAPIKey) ?? Defaults.liveKitAPIKey
-        displayName = d.string(forKey: Key.displayName) ?? NSFullUserName()
-        unbluBaseURL = d.string(forKey: Key.unbluBaseURL) ?? Defaults.unbluBaseURL
-        unbluUsername = d.string(forKey: Key.unbluUsername) ?? Defaults.unbluUsername
+        liveKitURL = Self.stored(d.string(forKey: Key.liveKitURL)) ?? Defaults.liveKitURL
+        liveKitAPIKey = Self.stored(d.string(forKey: Key.liveKitAPIKey)) ?? Defaults.liveKitAPIKey
+        displayName = Self.stored(d.string(forKey: Key.displayName)) ?? NSFullUserName()
+        unbluBaseURL = Self.stored(d.string(forKey: Key.unbluBaseURL)) ?? Defaults.unbluBaseURL
+        unbluUsername = Self.stored(d.string(forKey: Key.unbluUsername)) ?? Defaults.unbluUsername
         presenterOverlay = d.object(forKey: Key.presenterOverlay) as? Bool ?? false
-        liveKitAPISecret = Self.keychainGet("liveKitAPISecret") ?? Defaults.liveKitAPISecret
-        unbluPassword = Self.keychainGet("unbluPassword") ?? Defaults.unbluPassword
+        exactIdentity = d.object(forKey: Key.exactIdentity) as? Bool ?? false
+        liveKitAPISecret = Self.stored(Self.keychainGet("liveKitAPISecret")) ?? Defaults.liveKitAPISecret
+        unbluPassword = Self.stored(Self.keychainGet("unbluPassword")) ?? Defaults.unbluPassword
+    }
+
+    /// Nil for anything blank, so it falls through to the default.
+    nonisolated static func stored(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    /// Forgets everything stored, so the built-in defaults apply again.
+    func resetToDefaults() {
+        let d = UserDefaults.standard
+        for key in [Key.liveKitURL, Key.liveKitAPIKey, Key.displayName,
+                    Key.unbluBaseURL, Key.unbluUsername, Key.presenterOverlay] {
+            d.removeObject(forKey: key)
+        }
+        Self.keychainSet("liveKitAPISecret", "")
+        Self.keychainSet("unbluPassword", "")
     }
 
     private static func keychainQuery(_ account: String) -> [String: Any] {

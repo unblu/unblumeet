@@ -107,3 +107,34 @@ import CoreGraphics
     #expect(lines.last?.speaker == "Marek")
     #expect(lines.first?.text == "we should ship it")
 }
+
+private struct FakeError: Error, CustomStringConvertible { let description: String }
+
+@Test func aServerRefusalIsNotReportedAsAnAudioDeviceProblem() {
+    // Blaming CoreAudio for a permissions refusal sends people to the wrong
+    // place entirely.
+    let refusal = FakeError(description: "Unknown(Participant does not have permission to publish)")
+    #expect(!RoomController.isAudioDeviceFailure(refusal))
+    let message = RoomController.explainMicrophone(refusal)
+    #expect(message.contains("refused"))
+    #expect(!message.contains("virtual audio driver"))
+}
+
+@Test func aTimeoutStillPointsAtTheAudioDevice() {
+    let timeout = FakeError(description: "Error Domain=io.livekit.swift-sdk Code=101 \"Timed out\"")
+    #expect(RoomController.isAudioDeviceFailure(timeout))
+    #expect(RoomController.explainMicrophone(timeout).contains("virtual audio driver"))
+}
+
+@Test func theSessionIdentityIsUniquePerJoinByDefault() {
+    // An identity is exclusive, and a stale one from a crash blocks rejoining.
+    let a = RoomController.sessionIdentity(for: "person-1")
+    let b = RoomController.sessionIdentity(for: "person-1")
+    #expect(a != b)
+    #expect(a.hasPrefix("person-1~"))
+}
+
+@Test func theExactIdentityIsTheBarePersonId() {
+    // What Unblu's call UI matches against.
+    #expect(RoomController.sessionIdentity(for: "person-1", exact: true) == "person-1")
+}

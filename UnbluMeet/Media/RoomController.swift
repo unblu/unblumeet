@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Observation
 import LiveKit
@@ -31,6 +32,7 @@ final class RoomController {
     /// between accurate levels and the server's approximation.
     private var loggedMeterSource = false
     private(set) var cameraPublisher: CameraPublisher?
+    private(set) var isCameraOn = false
     let markStore = MarkStore()
     private(set) var markTransport: MarkTransport?
     private(set) var localIdentity: String?
@@ -61,8 +63,8 @@ final class RoomController {
     /// A LiveKit identity is exclusive: a second client claiming the same one
     /// evicts the first, and a stale participant left by a crash blocks a
     /// rejoin — both show up as connection timeouts.
-    nonisolated static func sessionIdentity(for personId: String) -> String {
-        "\(personId)~\(UUID().uuidString.prefix(8))"
+    nonisolated static func sessionIdentity(for personId: String, exact: Bool = false) -> String {
+        exact ? personId : "\(personId)~\(UUID().uuidString.prefix(8))"
     }
 
     func connect(roomName: String, identity personId: String) async {
@@ -73,7 +75,7 @@ final class RoomController {
         }
         state = .connecting
         joinPhase = .preparing
-        let identity = Self.sessionIdentity(for: personId)
+        let identity = Self.sessionIdentity(for: personId, exact: settings.exactIdentity)
         localIdentity = identity
 
         // Start from a clean Room every time; see the property comment.
@@ -159,10 +161,28 @@ final class RoomController {
     /// microphone if that is what it takes.
     func enableMicrophone() async {
         microphoneFailure = nil
+
+        // Asked for explicitly rather than left to the audio engine: an
+        // unanswered or denied prompt surfaced as a ten-second publish timeout
+        // with nothing pointing at permissions.
+        guard await MicrophonePermission.request() else {
+            microphoneFailure = "Microphone access is denied. Enable UnbluMeet under "
+                + "System Settings > Privacy & Security > Microphone."
+            logger.error("Microphone access denied")
+            return
+        }
+
         do {
             try await room.localParticipant.setMicrophone(enabled: true)
             return
         } catch {
+            guard Self.isAudioDeviceFailure(error) else {
+                // Not a local audio problem, so retrying without voice
+                // processing would change nothing.
+                microphoneFailure = Self.explainMicrophone(error)
+                logger.error("Microphone failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
             logger.warning("Microphone failed, retrying without voice processing: \(error.localizedDescription, privacy: .public)")
         }
 
@@ -171,17 +191,37 @@ final class RoomController {
             try await room.localParticipant.setMicrophone(enabled: true)
             voiceProcessingBypassed = true
         } catch {
-            microphoneFailure = """
-                The microphone could not be started.
-
-                macOS could not build the audio device it needs. This usually \
-                clears on a retry; if it keeps happening, a virtual audio driver \
-                or an iPhone microphone connected over Continuity is often the \
-                cause — switching input device in the microphone menu avoids it.
-
-                \(error)
-                """
+            microphoneFailure = Self.explainMicrophone(error)
         }
+    }
+
+    /// Whether this is macOS failing to build its audio device, as opposed to
+    /// the server refusing.
+    nonisolated static func isAudioDeviceFailure(_ error: Error) -> Bool {
+        let text = "\(error)".lowercased()
+        return text.contains("timed out") || text.contains("timeout")
+    }
+
+    /// The server's own words when it has them.
+    ///
+    /// Every failure used to be reported as a CoreAudio problem, so a refusal
+    /// from the server read as a broken microphone and sent people looking at
+    /// their audio devices.
+    nonisolated static func explainMicrophone(_ error: Error) -> String {
+        let text = "\(error)"
+        if text.lowercased().contains("permission") {
+            return "The server refused to let this participant publish audio.\n\n"
+                + "The access token grants publishing, so the room or the API key is "
+                + "configured to withhold it.\n\n\(text)"
+        }
+        if isAudioDeviceFailure(error) {
+            return "The microphone could not be started.\n\n"
+                + "macOS could not build the audio device it needs. This usually clears "
+                + "on a retry; if it keeps happening, a virtual audio driver or an iPhone "
+                + "microphone connected over Continuity is often the cause — switching "
+                + "input device in the microphone menu avoids it.\n\n\(text)"
+        }
+        return "The microphone could not be started.\n\n\(text)"
     }
 
     func clearMicrophoneFailure() {
@@ -191,6 +231,7 @@ final class RoomController {
     /// Camera goes through our own capture path so background replacement can
     /// run before encoding; the SDK exposes no processor hook.
     func setCamera(_ enabled: Bool) async {
+        isCameraOn = enabled
         if enabled {
             let publisher = cameraPublisher ?? CameraPublisher(
                 room: room, frameStore: frameStore, localIdentity: localIdentity ?? "me",
@@ -219,6 +260,16 @@ final class RoomController {
 
     func setPresenterOverlay(_ enabled: Bool) {
         presenterOverlay.isEnabled = enabled
+        // The cut-out comes from camera frames, so the camera has to be
+        // running while sharing even though nothing shows it on its own.
+        guard isSharingScreen, isCameraOn else { return }
+        Task {
+            if enabled {
+                await setCamera(true)
+            } else {
+                await cameraPublisher?.stop()
+            }
+        }
     }
 
     /// True while the presenter is being drawn onto their own share.

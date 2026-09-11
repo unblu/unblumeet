@@ -1,18 +1,38 @@
 # UnbluMeet
 
-A native macOS conferencing app built on LiveKit for media and the Unblu Web
-API v4 for conversations and chat. Internal demo tool.
+UnbluMeet lets you check that a LiveKit deployment is reachable and healthy
+from a real client — connection quality, media path, latency and packet loss,
+shown live while the call runs.
+
+It is a fully native macOS app: LiveKit for media, the Unblu Web API v4 for
+conversations and chat, and no web view anywhere. Video and audio run through
+LiveKit independently of the Unblu server.
 
 Video is composited with Metal rather than one view per participant, which is
 what makes 100 participants practical: unwatched tiles are unsubscribed and
 their publishers stop uploading.
 
-## Demo
+## What you can test
 
+- **A LiveKit deployment** — connection time, ICE candidate type, whether media
+  travels directly or through a relay, round-trip time, jitter, packet loss and
+  throughput, all charted live while the call runs (⌘I).
+- **Encryption and routing** — which node you landed on, what the transport
+  negotiated, and whether the server can read the media.
+- **Media end to end** — camera, microphone and screen sharing published
+  through the app's own pipeline, so you see what actually survives the trip.
+- **Behaviour under load** — the participant simulator fills a room with
+  hundreds of participants, each publishing real video and real speech. Every
+  one is a lightweight process replaying pre-encoded media rather than an
+  encoder, so the count scales far beyond a browser-per-person setup.
+- **An Unblu server's Web API** — conversations, people, messages and the
+  message log, with API latency reported alongside.
+
+## Demo
 
 [![Watch the demo](docs/demo-poster.jpg)](https://drive.google.com/file/d/1LKxbPWyvnjIYTZ_7YXGjVIyAZes2n7Rr/view?usp=share_link)
 
-<video src="docs/demo.mp4" controls width="100%"></video>
+The video is also in this repo at [`docs/demo.mp4`](docs/demo.mp4).
 
 ## What it does
 
@@ -26,13 +46,13 @@ their publishers stop uploading.
 ## Building
 
 ```
-xcodegen generate
 open UnbluMeet.xcodeproj
 ```
 
-Requires XcodeGen (`brew install xcodegen`) and macOS 26. Sources live in
-file-system-synchronized folders, so adding a file needs no regeneration —
-only a change to `project.yml` does.
+Requires macOS 26. The Xcode project is committed, so a clone builds as-is.
+Sources live in file-system-synchronized folders, so adding a file needs no
+regeneration — only a change to `project.yml` does, and that needs XcodeGen
+(`brew install xcodegen`) and `xcodegen generate`.
 
 ## Configuration
 
@@ -49,7 +69,8 @@ Values are kept in UserDefaults, secrets in the keychain.
 ## Simulating participants
 
 Fills a room with people who have faces and voices, so layouts, captions,
-speaking indicators and the summary can be exercised alone:
+speaking indicators and the summary can be exercised alone — and so a server
+can be put under load without a browser per participant:
 
 ```
 LIVEKIT_URL=wss://… LIVEKIT_API_KEY=… LIVEKIT_API_SECRET=… \

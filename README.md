@@ -10,7 +10,7 @@ their publishers stop uploading.
 ## Demo
 
 
-[![Watch the demo](docs/demo-poster.jpg)](https://drive.google.com/file/d/1z4ZU3Vp9U6l7otsw4HKq8VzQqbvU6svD/view?usp=share_link)
+[![Watch the demo](docs/demo-poster.jpg)](https://drive.google.com/file/d/1LKxbPWyvnjIYTZ_7YXGjVIyAZes2n7Rr/view?usp=share_link)
 
 <video src="docs/demo.mp4" controls width="100%"></video>
 

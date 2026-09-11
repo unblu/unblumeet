@@ -32,8 +32,6 @@ their publishers stop uploading.
 
 [![Watch the demo](docs/demo-poster.jpg)](https://drive.google.com/file/d/1LKxbPWyvnjIYTZ_7YXGjVIyAZes2n7Rr/view?usp=share_link)
 
-The video is also in this repo at [`docs/demo.mp4`](docs/demo.mp4).
-
 ## What it does
 
 - Grid, speaker and pinned layouts; drag tiles to rearrange them
